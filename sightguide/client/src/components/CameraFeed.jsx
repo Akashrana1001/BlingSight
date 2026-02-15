@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useContext, useCallback } from 'react';
 import useObjectDetection from '../hooks/useObjectDetection';
+import useImageClassifier from '../hooks/useImageClassifier';
 import useSpeech from '../hooks/useSpeech';
 import AuthContext from '../context/AuthContext';
 import axios from 'axios';
@@ -20,6 +21,12 @@ const CameraFeed = () => {
     stopDetection,
     isDetecting
   } = useObjectDetection(videoRef, canvasRef);
+
+  const {
+    classify,
+    isClassifierLoading,
+    classifierError
+  } = useImageClassifier();
 
   const {
     speak,
@@ -89,12 +96,7 @@ const CameraFeed = () => {
     console.log("Command received:", transcript);
 
     if (transcript.includes('identify')) {
-      if (detectedObjects.length > 0) {
-        const names = detectedObjects.map(obj => obj.class).join(', ');
-        speak(`I see: ${names}`);
-      } else {
-        speak("I don't see anything right now.");
-      }
+      handleIdentifyCommand();
     } else if (transcript.includes('help')) {
       speak("Say identify to list objects. Say history to hear last detections. Dangerous objects will trigger an alert.");
     } else if (transcript.includes('history')) {
@@ -105,6 +107,44 @@ const CameraFeed = () => {
 
     setTranscript(''); // Clear command
   }, [transcript, detectedObjects, speak, fetchLastLogs]);
+
+  const handleIdentifyCommand = async () => {
+    speak("Analyzing scene...");
+
+    // 1. Get detailed classification (MobileNet)
+    let detailedDescription = "";
+    if (videoRef.current && !isClassifierLoading && !classifierError) {
+      const predictions = await classify(videoRef.current);
+      // Filter out low confidence predictions and get top one
+      if (predictions.length > 0 && predictions[0].probability > 0.4) {
+         detailedDescription = predictions[0].className;
+      }
+    }
+
+    // 2. Get standard detection (CocoSSD)
+    // Filter out objects that might be the same as detailed description to avoid redundancy
+    const detectedNames = [...new Set(detectedObjects
+      .map(obj => obj.class)
+      .filter(name => !detailedDescription.toLowerCase().includes(name.toLowerCase()))
+    )];
+
+    // 3. Construct response
+    let response = "";
+
+    if (detailedDescription) {
+      response += `I see a ${detailedDescription} directly ahead. `;
+    }
+
+    if (detectedNames.length > 0) {
+      response += `I also detect: ${detectedNames.join(', ')}.`;
+    }
+
+    if (!response) {
+      response = "I cannot identify anything clearly right now.";
+    }
+
+    speak(response);
+  };
 
   const fetchLastLogs = useCallback(async () => {
     if (!user) {
@@ -161,9 +201,9 @@ const CameraFeed = () => {
     <div className="relative min-h-screen bg-black flex flex-col">
       {/* Camera Feed */}
       <div className="relative flex-grow bg-black flex items-center justify-center overflow-hidden">
-        {isModelLoading && (
+        {(isModelLoading || isClassifierLoading) && (
            <div className="absolute z-20 text-yellow-400 text-2xl font-bold animate-pulse">
-             Loading AI Model...
+             Loading AI Models...
            </div>
         )}
 

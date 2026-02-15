@@ -19,6 +19,10 @@ const useSpeech = () => {
 
       recognitionRef.current.onstart = () => setIsListening(true);
       recognitionRef.current.onend = () => setIsListening(false);
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+      };
       recognitionRef.current.onresult = (event) => {
         const last = event.results.length - 1;
         const text = event.results[last][0].transcript;
@@ -44,20 +48,20 @@ const useSpeech = () => {
   }, []);
 
   const startListening = useCallback(() => {
-    if (recognitionRef.current && !isListening) {
+    if (recognitionRef.current) {
       try {
         recognitionRef.current.start();
       } catch (e) {
-        console.error("Recognition already started", e);
+        console.error("Recognition error/already started", e);
       }
     }
-  }, [isListening]);
+  }, []);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
+    if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
-  }, [isListening]);
+  }, []);
 
   return {
     speak,

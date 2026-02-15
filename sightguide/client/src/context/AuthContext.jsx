@@ -59,6 +59,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem('user');
     setUser(null);
+    window.location.href = '/login'; // Force redirect to ensure clean state
   };
 
   return (
